@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <title>ОКБ1 Фоторедактор</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
   <style>
     :root {
       --bg: #f4f4f4;
@@ -26,6 +26,7 @@
     * {
       box-sizing: border-box;
       transition: background-color 0.3s ease, color 0.3s ease;
+      -webkit-tap-highlight-color: transparent;
     }
 
     body {
@@ -38,6 +39,7 @@
       align-items: center;
       padding: 0;
       min-height: 100vh;
+      touch-action: manipulation;
     }
 
     header {
@@ -112,6 +114,7 @@
       max-width: 100%;
       touch-action: none;
       background: white;
+      display: block;
     }
 
     .controls {
@@ -203,6 +206,11 @@
         flex-direction: column;
         gap: 10px;
       }
+      
+      canvas {
+        width: 100%;
+        height: auto;
+      }
     }
   </style>
 </head>
@@ -240,9 +248,35 @@
     const brushSize = document.getElementById('brushSize');
     const toast = document.getElementById('toast');
 
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = colorPicker.value;
-    ctx.lineWidth = brushSize.value;
+    // Установка правильного размера canvas для мобильных устройств
+    function resizeCanvas() {
+      const containerWidth = document.querySelector('.editor').clientWidth;
+      const scale = containerWidth / canvas.width;
+      
+      canvas.style.width = containerWidth + 'px';
+      canvas.style.height = (canvas.height * scale) + 'px';
+      
+      // Сохраняем текущее изображение перед изменением размера
+      const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      // Устанавливаем физический размер canvas
+      canvas.width = containerWidth;
+      canvas.height = canvas.height * scale;
+      
+      // Восстанавливаем изображение
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    // Инициализация canvas
+    function initCanvas() {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = brushSize.value;
+      
+      // Для более плавного рисования на мобильных устройствах
+      ctx.imageSmoothingEnabled = true;
+    }
 
     const saveState = () => {
       history.push(canvas.toDataURL());
@@ -254,15 +288,29 @@
       img.crossOrigin = 'anonymous';
       img.src = 'https://i.imgur.com/XKdWNfa.png';
       img.onload = () => {
+        // Рисуем изображение с учетом текущего размера canvas
         ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         saveState();
       };
     };
 
+    function getCanvasPosition(clientX, clientY) {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      
+      return {
+        x: (clientX - rect.left) * scaleX,
+        y: (clientY - rect.top) * scaleY
+      };
+    }
+
     function startDrawing(x, y) {
       drawing = true;
       ctx.beginPath();
       ctx.moveTo(x, y);
+      ctx.lineTo(x, y);
+      ctx.stroke();
     }
 
     function draw(x, y) {
@@ -279,25 +327,39 @@
       }
     }
 
-    canvas.addEventListener('mousedown', e => startDrawing(e.offsetX, e.offsetY));
-    canvas.addEventListener('mousemove', e => draw(e.offsetX, e.offsetY));
+    // Обработчики для мыши
+    canvas.addEventListener('mousedown', e => {
+      const pos = getCanvasPosition(e.clientX, e.clientY);
+      startDrawing(pos.x, pos.y);
+    });
+    
+    canvas.addEventListener('mousemove', e => {
+      const pos = getCanvasPosition(e.clientX, e.clientY);
+      draw(pos.x, pos.y);
+    });
+    
     canvas.addEventListener('mouseup', stopDrawing);
     canvas.addEventListener('mouseleave', stopDrawing);
 
+    // Обработчики для касаний
     canvas.addEventListener('touchstart', e => {
-      const rect = canvas.getBoundingClientRect();
+      e.preventDefault();
       const touch = e.touches[0];
-      startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
+      const pos = getCanvasPosition(touch.clientX, touch.clientY);
+      startDrawing(pos.x, pos.y);
     });
 
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
       const touch = e.touches[0];
-      draw(touch.clientX - rect.left, touch.clientY - rect.top);
-    }, { passive: false });
+      const pos = getCanvasPosition(touch.clientX, touch.clientY);
+      draw(pos.x, pos.y);
+    });
 
-    canvas.addEventListener('touchend', stopDrawing);
+    canvas.addEventListener('touchend', e => {
+      e.preventDefault();
+      stopDrawing();
+    });
 
     document.getElementById('eraser').addEventListener('click', (e) => {
       isEraser = !isEraser;
@@ -312,7 +374,7 @@
         img.src = history[history.length - 1];
         img.onload = () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         };
       }
     });
@@ -342,7 +404,15 @@
       toggleBtn.textContent = document.body.classList.contains('dark') ? '☀️ Тема' : '🌙 Тема';
     });
 
-    loadImage();
+    // Инициализация при загрузке
+    window.addEventListener('load', () => {
+      resizeCanvas();
+      initCanvas();
+      loadImage();
+    });
+
+    // Обработка изменения размера окна
+    window.addEventListener('resize', resizeCanvas);
   </script>
 </body>
 </html>
