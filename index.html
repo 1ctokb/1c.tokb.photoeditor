@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
@@ -95,8 +95,8 @@
       backdrop-filter: blur(10px);
       border-radius: 24px;
       padding: 28px;
-      max-width: 900px;
       width: 100%;
+      max-width: 900px;
       box-shadow: 0 20px 60px rgba(0, 0, 0, 0.08);
       display: flex;
       flex-direction: column;
@@ -109,7 +109,7 @@
       border-radius: 18px;
       border: 1px solid #dcdfe6;
       box-shadow: 0 6px 18px rgba(0, 0, 0, 0.04);
-      max-width: 100%;
+      width: 100%;
       touch-action: none;
       background: white;
     }
@@ -164,14 +164,6 @@
       color: #a00;
     }
 
-    .color-indicator {
-      width: 32px;
-      height: 32px;
-      border-radius: 50%;
-      border: 2px solid #ccc;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.2);
-    }
-
     .toast {
       position: fixed;
       bottom: 20px;
@@ -217,7 +209,7 @@
   </header>
 
   <div class="editor">
-    <canvas id="canvas" width="800" height="600"></canvas>
+    <canvas id="canvas"></canvas>
     <div class="controls">
       <input type="color" id="colorPicker" value="#000000" title="Выберите цвет" />
       <input type="range" id="brushSize" min="1" max="50" value="5" title="Размер кисти" />
@@ -240,9 +232,23 @@
     const brushSize = document.getElementById('brushSize');
     const toast = document.getElementById('toast');
 
-    ctx.lineCap = 'round';
-    ctx.strokeStyle = colorPicker.value;
-    ctx.lineWidth = brushSize.value;
+    function resizeCanvas() {
+      const ratio = window.devicePixelRatio || 1;
+      const displayWidth = canvas.clientWidth;
+      const displayHeight = displayWidth * 0.75; // Пропорция 4:3
+
+      canvas.width = displayWidth * ratio;
+      canvas.height = displayHeight * ratio;
+      canvas.style.height = displayHeight + 'px';
+
+      ctx.scale(ratio, ratio);
+      ctx.lineCap = 'round';
+      ctx.strokeStyle = colorPicker.value;
+      ctx.lineWidth = brushSize.value;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
     const saveState = () => {
       history.push(canvas.toDataURL());
@@ -285,16 +291,20 @@
     canvas.addEventListener('mouseleave', stopDrawing);
 
     canvas.addEventListener('touchstart', e => {
-      const rect = canvas.getBoundingClientRect();
       const touch = e.touches[0];
-      startDrawing(touch.clientX - rect.left, touch.clientY - rect.top);
+      const rect = e.target.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+      startDrawing(x, y);
     });
 
     canvas.addEventListener('touchmove', e => {
       e.preventDefault();
-      const rect = canvas.getBoundingClientRect();
       const touch = e.touches[0];
-      draw(touch.clientX - rect.left, touch.clientY - rect.top);
+      const rect = e.target.getBoundingClientRect();
+      const x = (touch.clientX - rect.left) * (canvas.width / rect.width);
+      const y = (touch.clientY - rect.top) * (canvas.height / rect.height);
+      draw(x, y);
     }, { passive: false });
 
     canvas.addEventListener('touchend', stopDrawing);
@@ -312,7 +322,7 @@
         img.src = history[history.length - 1];
         img.onload = () => {
           ctx.clearRect(0, 0, canvas.width, canvas.height);
-          ctx.drawImage(img, 0, 0);
+          ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
         };
       }
     });
